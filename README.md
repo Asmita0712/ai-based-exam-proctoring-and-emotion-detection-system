@@ -71,15 +71,3 @@ python scripts/test_camera.py   # requires a real webcam + display
 python scripts/test_mic.py      # requires a real microphone
 pytest tests/unit/test_health.py -v
 ```
-
-## Phase status
-
-| Phase | Scope | Status |
-|---|---|---|
-| 0 | Project structure & environment | Complete |
-| 1 | Basic multimodal model (rule-based) | Not started |
-| 2 | Emotion detection differentiator | Not started |
-| 3 | Learned fusion + temporal context | Not started |
-| 4 | Dataset, training & evaluation | Not started |
-
-We do not move to the next phase until explicitly instructed.
