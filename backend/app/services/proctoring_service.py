@@ -8,16 +8,25 @@ ml/pipelines/inference_pipeline.py.
 Phase 0: intentionally not implemented yet. No ML code exists to call
 into. This is the documented placeholder Phase 1 will fill in.
 """
+from typing import Any, Dict
 from app.schemas.events import BrowserEvent
+from ml.utils.tab_tracker import TabTracker
+
+# Active session tab trackers: session_id -> TabTracker
+_SESSION_TAB_TRACKERS: Dict[str, TabTracker] = {}
 
 
-def record_browser_event(event: BrowserEvent) -> None:
+def get_tab_tracker(session_id: str) -> TabTracker:
+    """Retrieves or creates a TabTracker for the given session ID."""
+    if session_id not in _SESSION_TAB_TRACKERS:
+        _SESSION_TAB_TRACKERS[session_id] = TabTracker()
+    return _SESSION_TAB_TRACKERS[session_id]
+
+
+def record_browser_event(event: BrowserEvent) -> Dict[str, Any]:
     """
-    Placeholder. Phase 1 will persist/forward this event into the
-    feature-extraction pipeline. Deliberately not implemented in
-    Phase 0 to avoid faking behavior that doesn't exist yet.
+    Records a browser tab or window focus event into the session's TabTracker.
     """
-    raise NotImplementedError(
-        "record_browser_event is implemented in Phase 1 "
-        "(tab/window tracking integration)."
-    )
+    tracker = get_tab_tracker(event.session_id)
+    ts = event.timestamp.timestamp() if hasattr(event.timestamp, "timestamp") else None
+    return tracker.record_event(event.type, timestamp=ts)

@@ -71,3 +71,11 @@ python scripts/test_camera.py   # requires a real webcam + display
 python scripts/test_mic.py      # requires a real microphone
 pytest tests/unit/test_health.py -v
 ```
+
+## Phase 1 verification
+
+Run all modality unit and pipeline integration tests:
+
+```bash
+pytest tests/ -v
+```

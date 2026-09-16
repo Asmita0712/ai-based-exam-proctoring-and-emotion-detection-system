@@ -15,9 +15,11 @@ data/processed/*
 !data/processed/.gitkeep
 models/checkpoints/*
 !models/checkpoints/.gitkeep
-ml/models/**/*.pt
-ml/models/**/*.h5
-ml/models/**/*.pth
+*.pt
+*.pth
+*.onnx
+*.bin
+*.h5
 
 # --- Secrets ---
 .env

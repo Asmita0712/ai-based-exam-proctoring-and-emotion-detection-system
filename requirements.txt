@@ -11,4 +11,5 @@ scikit-learn
 torch
 torchaudio
 sounddevice
+onnxruntime
 pytest
