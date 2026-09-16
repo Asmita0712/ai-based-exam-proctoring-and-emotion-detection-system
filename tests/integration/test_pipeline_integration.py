@@ -24,6 +24,8 @@ def test_full_multimodal_pipeline_integration():
     assert "person_count" in visual_signals
     assert "gaze" in visual_signals
     assert "head_pose" in visual_signals
+    assert "emotion" in visual_signals
+    assert visual_signals["emotion"]["dominant_emotion"] == "neutral"
 
     # 3. Process synthetic audio chunk
     dummy_audio = np.zeros(512, dtype=np.float32)
@@ -49,6 +51,9 @@ def test_full_multimodal_pipeline_integration():
 
     assert feature_window["timestamp"] == 1700000000.0
     assert feature_window["tab_hidden"] is True
+    assert "emotion" in feature_window
+    assert feature_window["dominant_emotion"] == "neutral"
+    assert "emotion_confidence" in feature_window
 
     # 6. Run end-to-end inference
     result = run_inference(session_id="test_session_123", feature_window=feature_window)

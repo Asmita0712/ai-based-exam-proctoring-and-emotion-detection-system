@@ -49,7 +49,8 @@ def build_feature_window(
         "tab_hidden": tab_hidden,
         "window_blur": window_blur,
         "is_away": is_away,
-        "browser_events_count": len(events),
-        # Modality placeholder for Phase 2
-        "emotion": None,
+        # Emotion modality (Phase 2 Differentiator)
+        "emotion": visual.get("emotion"),
+        "dominant_emotion": visual.get("emotion", {}).get("dominant_emotion", "neutral") if isinstance(visual.get("emotion"), dict) else "neutral",
+        "emotion_confidence": visual.get("emotion", {}).get("emotion_confidence", 0.0) if isinstance(visual.get("emotion"), dict) else 0.0,
     }

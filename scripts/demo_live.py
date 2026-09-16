@@ -41,7 +41,7 @@ def draw_hud(frame, visual_res, fusion_res, fps):
 
     # 2. Semi-transparent overlay panel on top-left
     overlay = frame.copy()
-    panel_w, panel_h = 360, 240
+    panel_w, panel_h = 390, 270
     cv2.rectangle(overlay, (10, 10), (10 + panel_w, 10 + panel_h), (20, 20, 20), -1)
     cv2.addWeighted(overlay, 0.7, frame, 0.3, 0, frame)
 
@@ -50,14 +50,14 @@ def draw_hud(frame, visual_res, fusion_res, fps):
     cv2.putText(frame, f"AI Proctoring Live Monitor (FPS: {fps:.1f})", (20, y), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2)
 
     # Person count & multi-person
-    y += 28
+    y += 26
     p_count = visual_res.get("person_count", 0)
     mp_flag = visual_res.get("multi_person_flag", False)
     p_color = (0, 0, 255) if mp_flag or p_count == 0 else (0, 255, 0)
     cv2.putText(frame, f"Persons: {p_count} {'[ALERT: Multi-person!]' if mp_flag else ''}", (20, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, p_color, 2)
 
     # Gaze
-    y += 26
+    y += 24
     gaze = visual_res.get("gaze", {})
     gaze_away = visual_res.get("looking_away", False)
     g_ratio = gaze.get("gaze_ratio", 0.5)
@@ -65,15 +65,22 @@ def draw_hud(frame, visual_res, fusion_res, fps):
     cv2.putText(frame, f"Gaze: {g_ratio:.2f} {'[LOOKING AWAY]' if gaze_away else '[ON SCREEN]'}", (20, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, g_color, 2)
 
     # Head Pose
-    y += 26
+    y += 24
     pose = visual_res.get("head_pose", {})
     turned_away = visual_res.get("turned_away", False)
     yaw, pitch = pose.get("yaw", 0.0), pose.get("pitch", 0.0)
     hp_color = (0, 0, 255) if turned_away else (0, 255, 0)
     cv2.putText(frame, f"Head Pose: Y:{yaw:.0f} P:{pitch:.0f} {'[TURNED AWAY]' if turned_away else '[FORWARD]'}", (20, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, hp_color, 2)
 
+    # Emotion (Phase 2 Differentiator)
+    y += 24
+    emotion = visual_res.get("emotion", {})
+    dom_emo = emotion.get("dominant_emotion", "neutral")
+    emo_conf = emotion.get("emotion_confidence", 0.0)
+    cv2.putText(frame, f"Emotion: {dom_emo.upper()} ({emo_conf:.2f}) [Behavioral Signal]", (20, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 200, 100), 2)
+
     # Suspicion Score Bar
-    y += 32
+    y += 28
     score = fusion_res.get("suspicion_score", 0.0)
     is_flagged = fusion_res.get("flag", False)
     bar_color = (0, 0, 255) if is_flagged else (0, 255, 255) if score > 0.2 else (0, 255, 0)
