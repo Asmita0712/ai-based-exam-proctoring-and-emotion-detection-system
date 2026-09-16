@@ -1,0 +1,28 @@
+version: "3.9"
+
+# Phase 0: skeleton only. Both services are runnable locally without
+# Docker (see README) -- this file exists so containerized dev/deploy
+# is available later without restructuring the project.
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - ./backend:/app/backend
+      - ./ml:/app/ml
+
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+    depends_on:
+      - backend

@@ -1,0 +1,14 @@
+# Root requirements: ML / scripts / evaluation layer.
+# Backend API has its own requirements.txt (backend/requirements.txt)
+# so the API can be deployed without the heavier ML stack if needed.
+
+opencv-python
+numpy
+pandas
+mediapipe
+ultralytics
+scikit-learn
+torch
+torchaudio
+sounddevice
+pytest

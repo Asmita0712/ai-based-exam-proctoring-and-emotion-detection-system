@@ -1,0 +1,27 @@
+# --- Python ---
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# --- Node / frontend ---
+node_modules/
+frontend/dist/
+
+# --- Data & models (RULE 12) ---
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+models/checkpoints/*
+!models/checkpoints/.gitkeep
+ml/models/**/*.pt
+ml/models/**/*.h5
+ml/models/**/*.pth
+
+# --- Secrets ---
+.env
+*.key
+
+# --- OS ---
+.DS_Store
