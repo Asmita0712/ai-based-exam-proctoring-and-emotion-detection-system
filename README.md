@@ -72,10 +72,16 @@ python scripts/test_mic.py      # requires a real microphone
 pytest tests/unit/test_health.py -v
 ```
 
-## Phase 1 verification
+## Phase 1, 2 & 3 verification
 
-Run all modality unit and pipeline integration tests:
+Run the complete unit and multimodal integration test suite:
 
 ```bash
 pytest tests/ -v
+```
+
+Launch the real-time webcam visualizer demonstrating the full temporal BiLSTM pipeline:
+
+```bash
+python scripts/demo_live.py
 ```

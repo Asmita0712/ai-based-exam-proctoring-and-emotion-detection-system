@@ -55,14 +55,23 @@ def test_full_multimodal_pipeline_integration():
     assert feature_window["dominant_emotion"] == "neutral"
     assert "emotion_confidence" in feature_window
 
-    # 6. Run end-to-end inference
-    result = run_inference(session_id="test_session_123", feature_window=feature_window)
+    # 6. Run end-to-end inference across all 3 modes (Part E)
+    # Mode A: Baseline rule-based
+    res_base = run_inference(session_id="test_session_123", feature_window=feature_window, mode="baseline")
+    assert res_base["session_id"] == "test_session_123"
+    assert res_base["mode"] == "baseline"
+    assert "suspicion_score" in res_base
+    assert "browser_focus_lost" in res_base["contributors"]
+    assert "no_person_detected" in res_base["contributors"]
 
-    assert result["session_id"] == "test_session_123"
-    assert "suspicion_score" in result
-    assert "flag" in result
-    assert "contributors" in result
-    assert isinstance(result["contributors"], list)
-    # The tab was hidden and no person detected in zero-frame, so both should contribute
-    assert "browser_focus_lost" in result["contributors"]
-    assert "no_person_detected" in result["contributors"]
+    # Mode B: Learned fusion
+    res_learned = run_inference(session_id="test_session_123", feature_window=feature_window, mode="learned")
+    assert res_learned["mode"] == "learned"
+    assert "modality_importance" in res_learned
+    assert "gaze" in res_learned["modality_importance"]
+
+    # Mode C: Temporal BiLSTM
+    res_temporal = run_inference(session_id="test_session_123", feature_window=feature_window, mode="temporal")
+    assert res_temporal["mode"] == "temporal"
+    assert "temporal_context" in res_temporal
+    assert "is_sustained" in res_temporal["temporal_context"]

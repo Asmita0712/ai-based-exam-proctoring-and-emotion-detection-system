@@ -41,13 +41,14 @@ def draw_hud(frame, visual_res, fusion_res, fps):
 
     # 2. Semi-transparent overlay panel on top-left
     overlay = frame.copy()
-    panel_w, panel_h = 390, 270
+    panel_w, panel_h = 410, 310
     cv2.rectangle(overlay, (10, 10), (10 + panel_w, 10 + panel_h), (20, 20, 20), -1)
     cv2.addWeighted(overlay, 0.7, frame, 0.3, 0, frame)
 
     # 3. Text statuses
     y = 35
-    cv2.putText(frame, f"AI Proctoring Live Monitor (FPS: {fps:.1f})", (20, y), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2)
+    mode_name = inference_res.get("mode", "temporal").upper()
+    cv2.putText(frame, f"AI Proctoring Monitor (Mode: {mode_name} | FPS: {fps:.1f})", (20, y), cv2.FONT_HERSHEY_SIMPLEX, 0.52, (255, 255, 255), 2)
 
     # Person count & multi-person
     y += 26
@@ -79,24 +80,33 @@ def draw_hud(frame, visual_res, fusion_res, fps):
     emo_conf = emotion.get("emotion_confidence", 0.0)
     cv2.putText(frame, f"Emotion: {dom_emo.upper()} ({emo_conf:.2f}) [Behavioral Signal]", (20, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 200, 100), 2)
 
+    # Temporal context (Phase 3 BiLSTM)
+    y += 24
+    temp_ctx = inference_res.get("temporal_context", {})
+    is_sustained = temp_ctx.get("is_sustained", False)
+    seq_steps = temp_ctx.get("sequence_steps", 1)
+    temp_color = (0, 0, 255) if is_sustained else (0, 255, 0)
+    temp_text = "[SUSTAINED ALERT]" if is_sustained else "[NORMAL / INCIDENTAL]"
+    cv2.putText(frame, f"BiLSTM Context: {temp_text} (Seq: {seq_steps})", (20, y), cv2.FONT_HERSHEY_SIMPLEX, 0.48, temp_color, 2)
+
     # Suspicion Score Bar
     y += 28
-    score = fusion_res.get("suspicion_score", 0.0)
-    is_flagged = fusion_res.get("flag", False)
+    score = inference_res.get("suspicion_score", 0.0)
+    is_flagged = inference_res.get("flag", False)
     bar_color = (0, 0, 255) if is_flagged else (0, 255, 255) if score > 0.2 else (0, 255, 0)
 
     cv2.putText(frame, f"Suspicion Score: {score:.2f}", (20, y), cv2.FONT_HERSHEY_SIMPLEX, 0.55, bar_color, 2)
 
     # Draw score progress bar
     y += 10
-    bar_x, bar_w, bar_h = 20, 220, 14
+    bar_x, bar_w, bar_h = 20, 240, 14
     cv2.rectangle(frame, (bar_x, y), (bar_x + bar_w, y + bar_h), (80, 80, 80), -1)
     fill_w = int(bar_w * min(1.0, max(0.0, score)))
     cv2.rectangle(frame, (bar_x, y), (bar_x + fill_w, y + bar_h), bar_color, -1)
 
-    # Contributors
-    y += 28
-    contributors = fusion_res.get("contributors", [])
+    # Contributors / Modality Attribution
+    y += 26
+    contributors = inference_res.get("contributors", [])
     if contributors:
         cv2.putText(frame, f"Alerts: {', '.join(contributors[:2])}", (20, y), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 140, 255), 1)
     else:
@@ -106,9 +116,12 @@ def draw_hud(frame, visual_res, fusion_res, fps):
 
 
 def main():
-    print("Initializing Phase 1 AI Models (YOLOv8 + MediaPipe + solvePnP + Fusion)...")
+    print("Initializing Phase 3 AI Pipeline (YOLOv8 + MediaPipe + solvePnP + PyTorch FER + BiLSTM)...")
+    from ml.pipelines.feature_pipeline import build_feature_window
+    from ml.pipelines.inference_pipeline import InferencePipeline
+
     pipeline = VisualPipeline()
-    fusion = RuleBasedFusion(threshold=0.40)
+    inference_pipe = InferencePipeline(mode="temporal")
 
     print("Opening webcam (press 'q' in the camera window to quit)...")
     cap = cv2.VideoCapture(0)
@@ -131,19 +144,24 @@ def main():
         # 1. Run visual pipeline
         visual_res = pipeline.process_frame(frame)
 
-        # 2. Run baseline fusion
-        fusion_res = fusion.fuse({
-            "person_count": visual_res.get("person_count", 0),
-            "multi_person_flag": visual_res.get("multi_person_flag", False),
-            "no_person_flag": visual_res.get("no_person_flag", False),
-            "looking_away": visual_res.get("looking_away", False),
-            "turned_away": visual_res.get("turned_away", False),
-        })
+        # 2. Build feature window
+        feature_window = build_feature_window(
+            visual_signals=visual_res,
+            audio_signals={},
+            browser_events=[],
+            window_start=cur_time,
+        )
 
-        # 3. Draw annotations on frame
-        annotated_frame = draw_hud(frame, visual_res, fusion_res, fps)
+        # 3. Run multimodal temporal inference
+        inference_res = inference_pipe.run_inference(
+            session_id="live_demo_session",
+            feature_window=feature_window,
+        )
 
-        cv2.imshow("Multimodal Proctoring System - Phase 1 Live Demo", annotated_frame)
+        # 4. Draw annotations on frame
+        annotated_frame = draw_hud(frame, visual_res, inference_res, fps)
+
+        cv2.imshow("Multimodal Proctoring System - Phase 3 Live Demo", annotated_frame)
         if cv2.waitKey(1) & 0xFF == ord("q"):
             break
 
