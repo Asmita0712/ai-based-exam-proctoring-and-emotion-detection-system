@@ -13,3 +13,5 @@ torchaudio
 sounddevice
 onnxruntime
 pytest
+reportlab
+
