@@ -13,8 +13,13 @@ data/raw/*
 !data/raw/.gitkeep
 data/processed/*
 !data/processed/.gitkeep
+data/features/*
+!data/features/.gitkeep
+data/splits/*
+!data/splits/.gitkeep
 models/checkpoints/*
 !models/checkpoints/.gitkeep
+*.npy
 *.pt
 *.pth
 *.onnx
