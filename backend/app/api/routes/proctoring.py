@@ -15,7 +15,16 @@ class WindowInferenceRequest(BaseModel):
     session_id: str
     visual_signals: Optional[Dict[str, Any]] = None
     audio_signals: Optional[Dict[str, Any]] = None
+    browser_signals: Optional[Dict[str, Any]] = None
     mode: Optional[str] = "temporal"
+
+
+class FrameInferenceRequest(BaseModel):
+    session_id: str
+    image_base64: str
+    mode: Optional[str] = "temporal"
+    audio_signals: Optional[Dict[str, Any]] = None
+    browser_signals: Optional[Dict[str, Any]] = None
 
 
 @router.post("/events")
@@ -31,5 +40,18 @@ def analyze_window(request: WindowInferenceRequest) -> SuspicionResult:
         session_id=request.session_id,
         visual_signals=request.visual_signals,
         audio_signals=request.audio_signals,
+        browser_signals=request.browser_signals,
         mode=request.mode or "temporal",
+    )
+
+
+@router.post("/analyze-frame", response_model=SuspicionResult)
+def analyze_frame(request: FrameInferenceRequest) -> SuspicionResult:
+    """Processes a live webcam frame from the browser and executes multimodal inference."""
+    return proctoring_service.process_frame_inference(
+        session_id=request.session_id,
+        image_base64=request.image_base64,
+        mode=request.mode or "temporal",
+        audio_signals=request.audio_signals,
+        browser_signals=request.browser_signals,
     )

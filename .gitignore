@@ -3,9 +3,11 @@ venv/
 __pycache__/
 *.pyc
 .pytest_cache/
+.yolo/
 
 # --- Node / frontend ---
 node_modules/
+frontend/node_modules/
 frontend/dist/
 
 # --- Data & models (RULE 12) ---
@@ -25,6 +27,7 @@ models/checkpoints/*
 *.onnx
 *.bin
 *.h5
+*.task
 
 # --- Secrets ---
 .env

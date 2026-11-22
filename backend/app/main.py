@@ -4,6 +4,16 @@ FastAPI application entrypoint.
 Phase 0 scope: app wiring, CORS, and a real health-check endpoint.
 No ML inference is imported or called here (RULE 3).
 """
+import sys
+from pathlib import Path
+
+# Ensure project root and backend directory are on sys.path
+_ROOT_DIR = Path(__file__).resolve().parent.parent.parent
+_BACKEND_DIR = Path(__file__).resolve().parent.parent
+for _p in (str(_ROOT_DIR), str(_BACKEND_DIR)):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -19,7 +29,7 @@ app = FastAPI(title=settings.app_name, version=settings.app_version)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.frontend_origin],
+    allow_origins=[settings.frontend_origin, "http://127.0.0.1:5173", "http://localhost:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

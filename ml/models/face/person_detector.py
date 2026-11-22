@@ -19,7 +19,7 @@ class PersonDetector:
     def __init__(
         self,
         model_name_or_path: str = "yolov8n.pt",
-        conf_threshold: float = 0.4,
+        conf_threshold: float = 0.50,
         device: Optional[str] = None,
     ) -> None:
         """
@@ -28,6 +28,8 @@ class PersonDetector:
             conf_threshold: Minimum detection confidence threshold [0.0 - 1.0].
             device: 'cpu', 'cuda', or None (auto-detect).
         """
+        import os
+        os.environ.setdefault("YOLO_CONFIG_DIR", os.path.join(os.path.dirname(__file__), ".yolo"))
         from ultralytics import YOLO
         import torch
 
@@ -78,6 +80,43 @@ class PersonDetector:
                 for box, conf in zip(boxes_xyxy, confs):
                     boxes.append([float(coord) for coord in box])
                     confidences.append(float(conf))
+
+        # Deduplicate overlapping boxes and filter tiny background noise
+        if len(boxes) > 1:
+            combined = sorted(zip(boxes, confidences), key=lambda x: x[1], reverse=True)
+            filtered_boxes: List[List[float]] = []
+            filtered_confs: List[float] = []
+            img_area = float(frame.shape[0] * frame.shape[1])
+
+            for b, c in combined:
+                b_area = (b[2] - b[0]) * (b[3] - b[1])
+                # Filter tiny false-positive patches (< 2.5% of frame)
+                if b_area < 0.025 * img_area:
+                    continue
+
+                # Check overlap / containment with already accepted person boxes
+                duplicate = False
+                for existing in filtered_boxes:
+                    ix1 = max(b[0], existing[0])
+                    iy1 = max(b[1], existing[1])
+                    ix2 = min(b[2], existing[2])
+                    iy2 = min(b[3], existing[3])
+                    inter = max(0.0, ix2 - ix1) * max(0.0, iy2 - iy1)
+                    if inter > 0:
+                        ex_area = (existing[2] - existing[0]) * (existing[3] - existing[1])
+                        min_a = min(b_area, ex_area)
+                        union = b_area + ex_area - inter
+                        iou = inter / union if union > 0 else 0.0
+                        if iou > 0.35 or (min_a > 0 and (inter / min_a) > 0.65):
+                            duplicate = True
+                            break
+
+                if not duplicate:
+                    filtered_boxes.append(b)
+                    filtered_confs.append(c)
+
+            boxes = filtered_boxes
+            confidences = filtered_confs
 
         return {
             "person_count": len(boxes),

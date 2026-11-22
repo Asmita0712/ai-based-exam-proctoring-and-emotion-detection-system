@@ -103,7 +103,7 @@ class EmotionClassifier:
     def __init__(
         self,
         weights_path: Optional[str] = None,
-        smoothing_window: int = 15,
+        smoothing_window: int = 3,
         device: Optional[str] = None,
     ) -> None:
         """
@@ -159,12 +159,79 @@ class EmotionClassifier:
         tensor = torch.from_numpy(norm).unsqueeze(0).unsqueeze(0).to(self.device)
         return tensor
 
-    def predict(self, face_crop: Optional[np.ndarray]) -> Dict[str, Any]:
+    def _extract_blendshape_probabilities(self, blendshapes: Any) -> np.ndarray:
         """
-        Predicts emotion from a single face crop with temporal smoothing.
+        Extracts 7-class emotion probabilities from MediaPipe FaceLandmarker blendshapes,
+        properly accounting for baseline resting face morphology.
+        """
+        b: Dict[str, float] = {}
+        for c in blendshapes:
+            name = getattr(c, "category_name", None) or (c.get("category_name") if isinstance(c, dict) else None)
+            score = getattr(c, "score", None) or (c.get("score") if isinstance(c, dict) else 0.0)
+            if name:
+                b[name] = float(score or 0.0)
+
+        # 1. Happy: requires visible smiling above baseline
+        smile = max(0.0, 0.5 * (b.get("mouthSmileLeft", 0.0) + b.get("mouthSmileRight", 0.0)) - 0.05)
+        happy = smile * 2.5 + 0.3 * (b.get("cheekSquintLeft", 0.0) + b.get("cheekSquintRight", 0.0))
+
+        # 2. Surprise: requires clear jaw drop or very high brows
+        jaw = max(0.0, b.get("jawOpen", 0.0) - 0.08)
+        brow_up = max(0.0, b.get("browInnerUp", 0.0) - 0.20)
+        surprise = jaw * 2.0 + brow_up * 1.5
+
+        # 3. Angry: requires clear brow furrow down
+        brow_down = max(0.0, 0.5 * (b.get("browDownLeft", 0.0) + b.get("browDownRight", 0.0)) - 0.10)
+        sneer = max(0.0, 0.5 * (b.get("noseSneerLeft", 0.0) + b.get("noseSneerRight", 0.0)) - 0.08)
+        angry = brow_down * 2.0 + sneer * 1.5
+
+        # 4. Sad: requires mouth corners actively pulled down
+        frown = max(0.0, 0.5 * (b.get("mouthFrownLeft", 0.0) + b.get("mouthFrownRight", 0.0)) - 0.15)
+        pucker = max(0.0, b.get("mouthPucker", 0.0) - 0.12)
+        sad = frown * 2.5 + (brow_up * frown) * 2.0 + pucker * 1.0
+
+        # 5. Fear: wide eyes and raised inner brows
+        wide = max(0.0, 0.5 * (b.get("eyeWideLeft", 0.0) + b.get("eyeWideRight", 0.0)) - 0.15)
+        fear = wide * 2.0 + brow_up * 1.0
+
+        # 6. Disgust: nose sneer and upper lip raise
+        lip_up = max(0.0, 0.5 * (b.get("mouthUpperUpLeft", 0.0) + b.get("mouthUpperUpRight", 0.0)) - 0.10)
+        disgust = sneer * 2.0 + lip_up * 1.5
+
+        # 7. Neutral: dominant when active expressions are low
+        max_active = max(happy, surprise, angry, sad, fear, disgust)
+        neutral = max(0.25, 1.0 - max_active * 1.5)
+
+        raw = [
+            angry,       # 0: angry
+            disgust,     # 1: disgust
+            fear,        # 2: fear
+            happy,       # 3: happy
+            sad,         # 4: sad
+            surprise,    # 5: surprise
+            neutral,     # 6: neutral
+        ]
+
+        arr = np.array(raw, dtype=np.float32)
+        total = float(np.sum(arr))
+        if total > 0:
+            arr /= total
+        else:
+            arr = np.zeros(7, dtype=np.float32)
+            arr[6] = 1.0
+        return arr
+
+    def predict(
+        self,
+        face_crop: Optional[np.ndarray],
+        landmarks: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        """
+        Predicts emotion from a single face crop and/or facial landmarks with temporal smoothing.
 
         Args:
             face_crop: Cropped face image as numpy array.
+            landmarks: Optional face landmarks object with _blendshapes attribute.
 
         Returns:
             Structured dictionary:
@@ -174,20 +241,25 @@ class EmotionClassifier:
                 "emotion_scores": dict of emotion -> probability
             }
         """
-        tensor = self.preprocess_face(face_crop)
-        if tensor is None:
-            # Missing face handling (RULE 15)
-            default_scores = {emo: 0.0 for emo in EMOTION_LABELS}
-            default_scores["neutral"] = 1.0
-            return {
-                "dominant_emotion": "neutral",
-                "emotion_confidence": 0.0,
-                "emotion_scores": default_scores,
-            }
+        blendshapes = getattr(landmarks, "_blendshapes", None) if landmarks is not None else None
 
-        with torch.no_grad():
-            logits = self.model(tensor)
-            probs = F.softmax(logits, dim=1).squeeze().cpu().numpy()
+        if blendshapes is not None and len(blendshapes) > 0:
+            probs = self._extract_blendshape_probabilities(blendshapes)
+        else:
+            tensor = self.preprocess_face(face_crop)
+            if tensor is None:
+                # Missing face handling (RULE 15)
+                default_scores = {emo: 0.0 for emo in EMOTION_LABELS}
+                default_scores["neutral"] = 1.0
+                return {
+                    "dominant_emotion": "neutral",
+                    "emotion_confidence": 0.0,
+                    "emotion_scores": default_scores,
+                }
+
+            with torch.no_grad():
+                logits = self.model(tensor)
+                probs = F.softmax(logits, dim=1).squeeze().cpu().numpy()
 
         self.history.append(probs)
 

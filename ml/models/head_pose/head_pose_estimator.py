@@ -121,6 +121,17 @@ class HeadPoseEstimator:
         yaw = float(angles[1])
         roll = float(angles[2])
 
+        # Normalize pitch and yaw relative to forward-facing camera orientation
+        if pitch > 90:
+            pitch -= 180
+        elif pitch < -90:
+            pitch += 180
+
+        if yaw > 90:
+            yaw -= 180
+        elif yaw < -90:
+            yaw += 180
+
         turned_away = (
             abs(yaw) > self.yaw_threshold
             or abs(pitch) > self.pitch_threshold

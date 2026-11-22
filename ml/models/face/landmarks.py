@@ -22,6 +22,11 @@ DEFAULT_MODEL_PATH = os.path.join(
 )
 
 
+class LandmarkList(list):
+    """Subclass of list that supports arbitrary attribute assignments (e.g. _blendshapes)."""
+    pass
+
+
 class FaceLandmarkExtractor:
     """Extracts 478 3D facial landmarks from frames for gaze and head-pose modules."""
 
@@ -32,6 +37,7 @@ class FaceLandmarkExtractor:
         min_face_presence_confidence: float = 0.5,
     ) -> None:
         self.model_path = os.path.abspath(model_path or DEFAULT_MODEL_PATH)
+        self.last_blendshapes: Optional[Any] = None
         self._ensure_model_exists()
 
         base_options = python.BaseOptions(model_asset_path=self.model_path)
@@ -74,6 +80,11 @@ class FaceLandmarkExtractor:
         result = self.landmarker.detect(mp_image)
 
         if result.face_landmarks and len(result.face_landmarks) > 0:
-            return result.face_landmarks[0]
+            landmarks = LandmarkList(result.face_landmarks[0])
+            if result.face_blendshapes and len(result.face_blendshapes) > 0:
+                shapes = result.face_blendshapes[0]
+                landmarks._blendshapes = shapes
+                self.last_blendshapes = shapes
+            return landmarks
 
         return None

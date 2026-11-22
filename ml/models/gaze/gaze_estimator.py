@@ -37,11 +37,11 @@ class GazeEstimator:
     def __init__(
         self,
         landmark_extractor: Optional[FaceLandmarkExtractor] = None,
-        horizontal_threshold_low: float = 0.35,
-        horizontal_threshold_high: float = 0.65,
-        vertical_threshold_low: float = 0.25,
-        vertical_threshold_high: float = 0.75,
-        smoothing_window: int = 10,
+        horizontal_threshold_low: float = 0.42,
+        horizontal_threshold_high: float = 0.58,
+        vertical_threshold_low: float = 0.35,
+        vertical_threshold_high: float = 0.65,
+        smoothing_window: int = 3,
     ) -> None:
         """
         Args:

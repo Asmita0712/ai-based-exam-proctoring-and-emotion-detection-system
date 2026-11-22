@@ -115,8 +115,14 @@ class InferencePipeline:
             seq = buf.get_sequence()
 
             temporal_res = self.bilstm.predict_sequence(seq)
-            suspicion_score = temporal_res["suspicion_probability"]
-            flag = temporal_res["flag"]
+            suspicion_score = float(temporal_res["suspicion_probability"])
+            flag = bool(temporal_res["flag"])
+
+            # Provide responsive preview for live manual testing while sequence accumulates
+            current_rule_score = float(rule_res["suspicion_score"])
+            if current_rule_score > 0.25 and suspicion_score < 0.4:
+                suspicion_score = max(suspicion_score, current_rule_score * 0.45)
+
             temporal_context = {
                 "is_sustained": temporal_res["is_sustained"],
                 "sequence_steps": len(buf.buffer),

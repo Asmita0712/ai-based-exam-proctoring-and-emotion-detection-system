@@ -4,6 +4,8 @@ Proctoring service -- the seam between the API layer and ml/pipelines.
 RULE 2 / RULE 3: FastAPI routes call into this service; this service
 (not the routes) is responsible for calling into ml/pipelines/inference_pipeline.py.
 """
+import base64
+import cv2
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 import numpy as np
@@ -13,6 +15,17 @@ from app.schemas.results import SuspicionResult, ModalitySignals
 from ml.pipelines.feature_pipeline import build_feature_window
 from ml.pipelines.inference_pipeline import run_inference
 from ml.utils.tab_tracker import TabTracker
+
+# Singleton VisualPipeline for fast real-time frame inference
+_VISUAL_PIPELINE: Optional[Any] = None
+
+
+def get_visual_pipeline():
+    global _VISUAL_PIPELINE
+    if _VISUAL_PIPELINE is None:
+        from ml.pipelines.visual_pipeline import VisualPipeline
+        _VISUAL_PIPELINE = VisualPipeline()
+    return _VISUAL_PIPELINE
 
 # Active session tab trackers: session_id -> TabTracker
 _SESSION_TAB_TRACKERS: Dict[str, TabTracker] = {}
@@ -40,6 +53,7 @@ def process_window_inference(
     session_id: str,
     visual_signals: Optional[Dict[str, Any]] = None,
     audio_signals: Optional[Dict[str, Any]] = None,
+    browser_signals: Optional[Dict[str, Any]] = None,
     mode: str = "temporal",
 ) -> SuspicionResult:
     """
@@ -47,6 +61,17 @@ def process_window_inference(
     Stores and returns the resulting SuspicionResult.
     """
     tracker = get_tab_tracker(session_id)
+
+    # Sync tracker with live browser signals from client
+    if browser_signals is not None:
+        if "tab_hidden" in browser_signals:
+            tracker.tab_hidden = bool(browser_signals["tab_hidden"])
+        if "window_blur" in browser_signals:
+            tracker.window_blur = bool(browser_signals["window_blur"])
+        if "is_away" in browser_signals and not browser_signals["is_away"]:
+            tracker.tab_hidden = False
+            tracker.window_blur = False
+
     browser_status = tracker.get_status()
 
     now_dt = datetime.now(timezone.utc)
@@ -109,3 +134,48 @@ def reset_session(session_id: str) -> None:
         _SESSION_TAB_TRACKERS[session_id].reset()
     if session_id in _SESSION_RESULTS:
         del _SESSION_RESULTS[session_id]
+
+
+def process_frame_inference(
+    session_id: str,
+    image_base64: str,
+    mode: str = "temporal",
+    audio_signals: Optional[Dict[str, Any]] = None,
+    browser_signals: Optional[Dict[str, Any]] = None,
+) -> SuspicionResult:
+    """
+    Decodes a base64 image frame from the browser, runs real-time visual
+    pipeline (YOLO + MediaPipe Iris + Head Pose + Emotion), and executes
+    multimodal suspicion inference.
+    """
+    if "," in image_base64:
+        image_base64 = image_base64.split(",", 1)[1]
+
+    img_bytes = base64.b64decode(image_base64)
+    np_arr = np.frombuffer(img_bytes, np.uint8)
+    frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+
+    visual_signals = {}
+    if frame is not None and frame.size > 0:
+        vp = get_visual_pipeline()
+        visual_signals = vp.process_frame(frame)
+        from app.core.logging import get_logger
+        _log = get_logger("proctoring_service")
+        _log.info(
+            "FRAME INFERENCE: size=%dx%d, persons=%s, looking_away=%s (gaze_ratio=%.2f), yaw=%.1f, pitch=%.1f, emo=%s",
+            frame.shape[1], frame.shape[0],
+            visual_signals.get("person_count"),
+            visual_signals.get("looking_away"),
+            visual_signals.get("gaze", {}).get("gaze_ratio", 0.5),
+            visual_signals.get("head_pose", {}).get("yaw", 0.0),
+            visual_signals.get("head_pose", {}).get("pitch", 0.0),
+            visual_signals.get("emotion", {}).get("dominant_emotion"),
+        )
+
+    return process_window_inference(
+        session_id=session_id,
+        visual_signals=visual_signals,
+        audio_signals=audio_signals,
+        browser_signals=browser_signals,
+        mode=mode,
+    )

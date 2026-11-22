@@ -61,10 +61,11 @@ class MultiPersonTracker:
 
         multi_person_frames = sum(1 for c in self.history if c > 1)
         ratio = multi_person_frames / len(self.history)
-        multi_flag = ratio >= self.ratio_threshold
+        # Require at least 2 multi-person detections in window to prevent 1-frame false alarms
+        multi_flag = (multi_person_frames >= 2) and (ratio >= self.ratio_threshold)
 
         zero_person_frames = sum(1 for c in self.history if c == 0)
-        no_person_flag = (zero_person_frames / len(self.history)) >= self.ratio_threshold
+        no_person_flag = (zero_person_frames >= 2) and ((zero_person_frames / len(self.history)) >= self.ratio_threshold)
 
         return {
             "person_count": current_count,

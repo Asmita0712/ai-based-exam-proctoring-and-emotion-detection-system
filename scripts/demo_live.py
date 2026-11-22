@@ -21,7 +21,7 @@ from ml.pipelines.visual_pipeline import VisualPipeline
 from ml.fusion.baseline_fusion import RuleBasedFusion
 
 
-def draw_hud(frame, visual_res, fusion_res, fps):
+def draw_hud(frame, visual_res, inference_res, fps):
     h, w = frame.shape[:2]
 
     # 1. Draw bounding boxes

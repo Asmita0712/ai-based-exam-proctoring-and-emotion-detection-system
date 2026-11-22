@@ -106,7 +106,7 @@ class VisualPipeline:
             head_h = max(20, int((by2 - by1) * 0.35))
             face_crop = frame[max(0, by1) : min(h, by1 + head_h), max(0, bx1) : min(w, bx2)]
 
-        emotion_res = self.emotion_classifier.predict(face_crop)
+        emotion_res = self.emotion_classifier.predict(face_crop, landmarks=landmarks)
 
         return {
             "person_count": det["person_count"],
