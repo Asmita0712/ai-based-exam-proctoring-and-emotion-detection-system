@@ -35,3 +35,19 @@ class SuspicionResult(BaseModel):
     flag: bool
     contributors: list[str] = []
     signals: ModalitySignals
+
+
+class ExamSummary(BaseModel):
+    session_id: str
+    total_frames_analyzed: int
+    exam_duration_seconds: float
+    flagged_frames_count: int
+    flagged_percentage: float
+    integrity_score: float
+    verdict: str
+    verdict_label: str
+    verdict_color: str
+    violations_summary: dict[str, int] = {}
+    dominant_emotion: str = "neutral"
+    top_contributors: list[str] = []
+

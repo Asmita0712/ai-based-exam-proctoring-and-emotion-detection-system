@@ -48,3 +48,13 @@ def test_submit_event_and_analyze_window():
     res_list = res_resp.json()
     assert len(res_list) >= 1
     assert res_list[0]["session_id"] == sess_id
+
+    # 4. Retrieve session summary and integrity score
+    sum_resp = client.get(f"/results/{sess_id}/summary")
+    assert sum_resp.status_code == 200
+    summary = sum_resp.json()
+    assert summary["session_id"] == sess_id
+    assert "integrity_score" in summary
+    assert "verdict" in summary
+    assert "violations_summary" in summary
+    assert summary["total_frames_analyzed"] >= 1

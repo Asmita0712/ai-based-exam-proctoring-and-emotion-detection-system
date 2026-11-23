@@ -15,6 +15,47 @@ function App() {
   const [lastLatency, setLastLatency] = useState(null);
   const [micActive, setMicActive] = useState(false);
   const [micLevel, setMicLevel] = useState(0);
+  const [examSummary, setExamSummary] = useState(null);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [loadingReport, setLoadingReport] = useState(false);
+
+  const fetchExamSummary = async () => {
+    try {
+      setLoadingReport(true);
+      const res = await fetch("http://localhost:8000/results/demo-session-001/summary");
+      if (res.ok) {
+        const data = await res.json();
+        setExamSummary(data);
+        setShowReportModal(true);
+      }
+    } catch (e) {
+      console.error("Failed to fetch exam summary:", e);
+    } finally {
+      setLoadingReport(false);
+    }
+  };
+
+  const handleEndExam = () => {
+    stopCamera();
+    fetchExamSummary();
+  };
+
+  const handleResetSession = async () => {
+    try {
+      await fetch("http://localhost:8000/proctoring/session/reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: "demo-session-001" }),
+      });
+      setSwitchCount(0);
+      setEventsLog([]);
+      setInferenceResult(null);
+      setExamSummary(null);
+      setShowReportModal(false);
+    } catch (e) {
+      console.error("Failed to reset session:", e);
+    }
+  };
 
   const videoRef = useRef(null);
   const streamRef = useRef(null);
@@ -466,21 +507,39 @@ function App() {
                   )}
                 </span>
               </div>
-              <div>
+              <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap" }}>
                 {!cameraActive ? (
-                  <button
-                    onClick={startCamera}
-                    style={{ padding: "0.5rem 1.2rem", backgroundColor: "#10b981", color: "white", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: "700" }}
-                  >
-                    Start Real-Time Camera Feed
-                  </button>
+                  <>
+                    <button
+                      onClick={startCamera}
+                      style={{ padding: "0.5rem 1.2rem", backgroundColor: "#10b981", color: "white", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: "700" }}
+                    >
+                      ▶ Start Camera Feed
+                    </button>
+                    <button
+                      onClick={fetchExamSummary}
+                      disabled={loadingReport}
+                      style={{ padding: "0.5rem 1.2rem", backgroundColor: "#334155", color: "#38bdf8", border: "1px solid #475569", borderRadius: "6px", cursor: "pointer", fontWeight: "700" }}
+                    >
+                      {loadingReport ? "Loading Report..." : "📊 View Integrity Score"}
+                    </button>
+                  </>
                 ) : (
-                  <button
-                    onClick={stopCamera}
-                    style={{ padding: "0.5rem 1.2rem", backgroundColor: "#ef4444", color: "white", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: "700" }}
-                  >
-                    Stop Camera
-                  </button>
+                  <>
+                    <button
+                      onClick={stopCamera}
+                      style={{ padding: "0.5rem 1rem", backgroundColor: "#64748b", color: "white", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: "600" }}
+                    >
+                      Pause Feed
+                    </button>
+                    <button
+                      onClick={handleEndExam}
+                      disabled={loadingReport}
+                      style={{ padding: "0.5rem 1.2rem", backgroundColor: "#6366f1", color: "white", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: "700", boxShadow: "0 0 12px rgba(99,102,241,0.4)" }}
+                    >
+                      {loadingReport ? "Calculating Report..." : "🏁 End Exam & View Integrity Report"}
+                    </button>
+                  </>
                 )}
               </div>
             </div>
@@ -763,6 +822,184 @@ function App() {
           </div>
         </section>
       </div>
+
+      {/* Post-Exam Integrity Report Modal */}
+      {showReportModal && examSummary && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.8)",
+            backdropFilter: "blur(6px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+            padding: "1rem",
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: "#1e293b",
+              borderRadius: "16px",
+              border: "1px solid #475569",
+              width: "100%",
+              maxWidth: "680px",
+              maxHeight: "90vh",
+              overflowY: "auto",
+              padding: "2rem",
+              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.75)",
+            }}
+          >
+            {/* Header */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.5rem", borderBottom: "1px solid #334155", paddingBottom: "1rem" }}>
+              <div>
+                <span style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "1px", color: "#94a3b8", fontWeight: "700" }}>
+                  Official Session Audit Record
+                </span>
+                <h2 style={{ fontSize: "1.5rem", margin: "0.2rem 0 0 0", color: "#f8fafc" }}>
+                  Exam Proctoring & Integrity Report
+                </h2>
+                <div style={{ fontSize: "0.85rem", color: "#64748b", marginTop: "4px" }}>
+                  Session ID: <code style={{ color: "#38bdf8" }}>{examSummary.session_id}</code>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowReportModal(false)}
+                style={{ backgroundColor: "transparent", border: "none", color: "#94a3b8", fontSize: "1.5rem", cursor: "pointer", padding: "0 6px" }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Score & Verdict Banner */}
+            <div
+              style={{
+                backgroundColor: "#0f172a",
+                borderRadius: "12px",
+                border: `2px solid ${examSummary.verdict_color}`,
+                padding: "1.5rem",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                flexWrap: "wrap",
+                gap: "1rem",
+                marginBottom: "1.5rem",
+              }}
+            >
+              <div>
+                <div style={{ fontSize: "0.85rem", color: "#94a3b8", textTransform: "uppercase", fontWeight: "600" }}>
+                  Final Calculated Integrity Score:
+                </div>
+                <div style={{ fontSize: "2.8rem", fontWeight: "900", color: examSummary.verdict_color, lineHeight: "1.1" }}>
+                  {examSummary.integrity_score}%
+                </div>
+                <div style={{ marginTop: "0.4rem", fontSize: "0.85rem", color: "#cbd5e1" }}>
+                  Flagged Ratio: <strong>{examSummary.flagged_percentage}%</strong> ({examSummary.flagged_frames_count} of {examSummary.total_frames_analyzed} frames)
+                </div>
+              </div>
+
+              <div style={{ textAlign: "right" }}>
+                <span
+                  style={{
+                    backgroundColor: examSummary.verdict_color + "22",
+                    color: examSummary.verdict_color,
+                    border: `1px solid ${examSummary.verdict_color}`,
+                    padding: "6px 14px",
+                    borderRadius: "8px",
+                    fontWeight: "800",
+                    fontSize: "0.95rem",
+                    display: "inline-block",
+                  }}
+                >
+                  {examSummary.verdict_label}
+                </span>
+                <div style={{ fontSize: "0.8rem", color: "#64748b", marginTop: "0.5rem" }}>
+                  Exam Duration: <strong>{examSummary.exam_duration_seconds}s</strong>
+                </div>
+              </div>
+            </div>
+
+            {/* Forensic Violations Breakdown */}
+            <div style={{ marginBottom: "1.5rem" }}>
+              <h4 style={{ fontSize: "0.95rem", color: "#cbd5e1", margin: "0 0 0.8rem 0" }}>
+                Forensic Modality Violations Breakdown:
+              </h4>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "0.8rem" }}>
+                {[
+                  { label: "Multi-Person Events", val: examSummary.violations_summary.multi_person, alert: examSummary.violations_summary.multi_person > 0 },
+                  { label: "Looking Away Frames", val: examSummary.violations_summary.looking_away, alert: examSummary.violations_summary.looking_away > 5 },
+                  { label: "Head Turned Frames", val: examSummary.violations_summary.head_turned, alert: examSummary.violations_summary.head_turned > 5 },
+                  { label: "Speech / Voice Detections", val: examSummary.violations_summary.speech_detected, alert: examSummary.violations_summary.speech_detected > 3 },
+                  { label: "Browser Tab Hidden", val: examSummary.violations_summary.tab_unfocused, alert: examSummary.violations_summary.tab_unfocused > 0 },
+                  { label: "Candidate Absence", val: examSummary.violations_summary.absence, alert: examSummary.violations_summary.absence > 0 },
+                ].map((item, idx) => (
+                  <div key={idx} style={{ backgroundColor: "#0f172a", border: `1px solid ${item.alert ? "#ef444466" : "#334155"}`, borderRadius: "8px", padding: "0.8rem" }}>
+                    <div style={{ fontSize: "0.72rem", color: "#94a3b8" }}>{item.label}</div>
+                    <div style={{ fontSize: "1.2rem", fontWeight: "800", color: item.alert ? "#f87171" : "#34d399", marginTop: "4px" }}>
+                      {item.val} {item.alert ? "⚠️" : "✓"}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Emotional State & Top Contributors */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: "1.5rem" }}>
+              <div style={{ backgroundColor: "#0f172a", padding: "1rem", borderRadius: "8px", border: "1px solid #334155" }}>
+                <div style={{ fontSize: "0.75rem", color: "#94a3b8" }}>DOMINANT EMOTION (FER)</div>
+                <div style={{ fontSize: "1.1rem", fontWeight: "700", color: "#38bdf8", textTransform: "capitalize", marginTop: "4px" }}>
+                  {examSummary.dominant_emotion}
+                </div>
+                <div style={{ fontSize: "0.75rem", color: "#64748b", marginTop: "2px" }}>Affective context only</div>
+              </div>
+
+              <div style={{ backgroundColor: "#0f172a", padding: "1rem", borderRadius: "8px", border: "1px solid #334155" }}>
+                <div style={{ fontSize: "0.75rem", color: "#94a3b8" }}>PRIMARY CONTRIBUTORS</div>
+                <div style={{ display: "flex", gap: "4px", flexWrap: "wrap", marginTop: "6px" }}>
+                  {examSummary.top_contributors.length === 0 ? (
+                    <span style={{ color: "#34d399", fontSize: "0.85rem", fontWeight: "600" }}>None (Clean conduct)</span>
+                  ) : (
+                    examSummary.top_contributors.map((c, i) => (
+                      <span key={i} style={{ backgroundColor: "#ef444422", color: "#f87171", border: "1px solid #ef444455", padding: "2px 6px", borderRadius: "4px", fontSize: "0.7rem", fontWeight: "600" }}>
+                        {c.replace(/_/g, " ")}
+                      </span>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "1rem", borderTop: "1px solid #334155" }}>
+              <button
+                onClick={handleResetSession}
+                style={{ padding: "0.6rem 1.2rem", backgroundColor: "#334155", color: "#f87171", border: "1px solid #ef444455", borderRadius: "6px", cursor: "pointer", fontWeight: "600", fontSize: "0.85rem" }}
+              >
+                🗑 Reset & Start New Session
+              </button>
+
+              <div style={{ display: "flex", gap: "0.8rem" }}>
+                <button
+                  onClick={() => window.print()}
+                  style={{ padding: "0.6rem 1.2rem", backgroundColor: "#0284c7", color: "white", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: "700", fontSize: "0.85rem" }}
+                >
+                  🖨 Print / Save Report
+                </button>
+                <button
+                  onClick={() => setShowReportModal(false)}
+                  style={{ padding: "0.6rem 1.2rem", backgroundColor: "#10b981", color: "white", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: "700", fontSize: "0.85rem" }}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

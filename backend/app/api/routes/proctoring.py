@@ -55,3 +55,14 @@ def analyze_frame(request: FrameInferenceRequest) -> SuspicionResult:
         audio_signals=request.audio_signals,
         browser_signals=request.browser_signals,
     )
+
+
+class ResetSessionRequest(BaseModel):
+    session_id: str
+
+
+@router.post("/session/reset")
+def reset_session(request: ResetSessionRequest) -> dict:
+    """Resets all tracked state and results for a session."""
+    proctoring_service.reset_session(request.session_id)
+    return {"reset": True, "session_id": request.session_id}
