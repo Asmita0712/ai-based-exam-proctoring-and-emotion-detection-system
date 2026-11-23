@@ -44,6 +44,8 @@ class InferencePipeline:
             device: 'cpu', 'cuda', or None.
         """
         self.mode = mode.lower()
+        self.rule_threshold = rule_threshold
+        self.learned_threshold = learned_threshold
         self.standardizer = FeatureStandardizer()
 
         # Phase 1 baseline
@@ -115,13 +117,25 @@ class InferencePipeline:
             seq = buf.get_sequence()
 
             temporal_res = self.bilstm.predict_sequence(seq)
-            suspicion_score = float(temporal_res["suspicion_probability"])
-            flag = bool(temporal_res["flag"])
+            lstm_score = float(temporal_res["suspicion_probability"])
 
-            # Provide responsive preview for live manual testing while sequence accumulates
-            current_rule_score = float(rule_res["suspicion_score"])
-            if current_rule_score > 0.25 and suspicion_score < 0.4:
-                suspicion_score = max(suspicion_score, current_rule_score * 0.45)
+            # Compute instant learned MLP and rule-based fusion scores for frame-level responsiveness
+            learned_res = self.learned_fusion.predict(vec)
+            instant_learned = float(learned_res["suspicion_score"])
+            instant_rule = float(rule_res["suspicion_score"])
+            instant_score = max(instant_rule, instant_learned)
+
+            # Responsive dual-branch calibration:
+            # 1. Onset of suspicious activity: react instantly without waiting for 30-frame sequence fill
+            if instant_score >= 0.35:
+                suspicion_score = max(lstm_score, instant_score)
+            # 2. Return to normal conduct: decay rapidly instead of staying stuck for 25 frames
+            elif instant_score < 0.25 and lstm_score > 0.35:
+                suspicion_score = (0.65 * instant_score) + (0.35 * lstm_score)
+            else:
+                suspicion_score = max(lstm_score, instant_score)
+
+            flag = bool(suspicion_score >= self.learned_threshold)
 
             temporal_context = {
                 "is_sustained": temporal_res["is_sustained"],

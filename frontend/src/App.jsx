@@ -207,7 +207,7 @@ function App() {
         isInferringFrameRef.current = false;
         setRealtimeInferring(false);
       }
-    }, 700);
+    }, 380);
 
     return () => clearInterval(interval);
   }, [cameraActive, inferenceMode]);
@@ -579,7 +579,7 @@ function App() {
             {cameraActive && (
               <div style={{ backgroundColor: "#0f172a", padding: "0.8rem", borderRadius: "8px", border: "1px solid #334155", color: "#34d399", fontSize: "0.85rem", display: "flex", alignItems: "center", gap: "0.6rem" }}>
                 <span style={{ width: "10px", height: "10px", borderRadius: "50%", backgroundColor: "#34d399", display: "inline-block" }}></span>
-                <span>Real-Time Inference is continuously streaming every 700ms. Look away or turn your head to watch the score react!</span>
+                <span>Real-Time Inference is continuously streaming every ~380ms. Look away or turn your head to watch the score react instantly!</span>
               </div>
             )}
           </section>
