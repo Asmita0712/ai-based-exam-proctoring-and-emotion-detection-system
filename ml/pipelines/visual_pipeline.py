@@ -24,9 +24,9 @@ class VisualPipeline:
     def __init__(
         self,
         yolo_model_path: str = "yolov8n.pt",
-        person_conf: float = 0.4,
-        yaw_threshold: float = 25.0,
-        pitch_threshold: float = 20.0,
+        person_conf: float = 0.55,
+        yaw_threshold: float = 38.0,
+        pitch_threshold: float = 30.0,
         emotion_weights_path: Optional[str] = None,
         device: Optional[str] = None,
     ) -> None:
@@ -35,13 +35,21 @@ class VisualPipeline:
             conf_threshold=person_conf,
             device=device,
         )
-        self.multi_person_tracker = MultiPersonTracker()
+        self.multi_person_tracker = MultiPersonTracker(history_len=15, multi_person_ratio_threshold=0.5)
         self.landmark_extractor = FaceLandmarkExtractor()
-        self.gaze_estimator = GazeEstimator(landmark_extractor=self.landmark_extractor)
+        self.gaze_estimator = GazeEstimator(
+            landmark_extractor=self.landmark_extractor,
+            horizontal_threshold_low=0.32,
+            horizontal_threshold_high=0.68,
+            vertical_threshold_low=0.22,
+            vertical_threshold_high=0.78,
+            smoothing_window=5,
+        )
         self.head_pose_estimator = HeadPoseEstimator(
             landmark_extractor=self.landmark_extractor,
             yaw_threshold=yaw_threshold,
             pitch_threshold=pitch_threshold,
+            roll_threshold=35.0,
         )
         self.emotion_classifier = EmotionClassifier(
             weights_path=emotion_weights_path,

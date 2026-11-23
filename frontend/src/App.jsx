@@ -79,6 +79,19 @@ function App() {
 
   // 2. Camera & Microphone feed handler
   const startCamera = async () => {
+    // Clean-slate reset of session history so new exam session starts at 0 frames
+    try {
+      await fetch("http://localhost:8000/proctoring/session/reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: "demo-session-001" }),
+      });
+      setSwitchCount(0);
+      setEventsLog([]);
+      setInferenceResult(null);
+      setExamSummary(null);
+    } catch (_) {}
+
     try {
       let stream = null;
       let hasAudio = false;
@@ -402,7 +415,7 @@ function App() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            session_id: "demo-session-001",
+            session_id: "simulation-preview-session",
             visual_signals: visualSignals,
             audio_signals: audioSignals,
             mode: targetMode,
@@ -930,17 +943,20 @@ function App() {
               </h4>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "0.8rem" }}>
                 {[
-                  { label: "Multi-Person Events", val: examSummary.violations_summary.multi_person, alert: examSummary.violations_summary.multi_person > 0 },
-                  { label: "Looking Away Frames", val: examSummary.violations_summary.looking_away, alert: examSummary.violations_summary.looking_away > 5 },
-                  { label: "Head Turned Frames", val: examSummary.violations_summary.head_turned, alert: examSummary.violations_summary.head_turned > 5 },
-                  { label: "Speech / Voice Detections", val: examSummary.violations_summary.speech_detected, alert: examSummary.violations_summary.speech_detected > 3 },
-                  { label: "Browser Tab Hidden", val: examSummary.violations_summary.tab_unfocused, alert: examSummary.violations_summary.tab_unfocused > 0 },
+                  { label: "Multi-Person Presence", val: examSummary.violations_summary.multi_person, alert: examSummary.violations_summary.multi_person > 0 },
+                  { label: "Looking Away", val: examSummary.violations_summary.looking_away, alert: examSummary.violations_summary.looking_away > 5 },
+                  { label: "Head Turned Away", val: examSummary.violations_summary.head_turned, alert: examSummary.violations_summary.head_turned > 5 },
+                  { label: "Speech / Talking", val: examSummary.violations_summary.speech_detected, alert: examSummary.violations_summary.speech_detected > 3 },
+                  { label: "Browser Tab Hidden / Away", val: examSummary.violations_summary.tab_unfocused, alert: examSummary.violations_summary.tab_unfocused > 0 },
                   { label: "Candidate Absence", val: examSummary.violations_summary.absence, alert: examSummary.violations_summary.absence > 0 },
                 ].map((item, idx) => (
                   <div key={idx} style={{ backgroundColor: "#0f172a", border: `1px solid ${item.alert ? "#ef444466" : "#334155"}`, borderRadius: "8px", padding: "0.8rem" }}>
                     <div style={{ fontSize: "0.72rem", color: "#94a3b8" }}>{item.label}</div>
-                    <div style={{ fontSize: "1.2rem", fontWeight: "800", color: item.alert ? "#f87171" : "#34d399", marginTop: "4px" }}>
-                      {item.val} {item.alert ? "⚠️" : "✓"}
+                    <div style={{ fontSize: "1.1rem", fontWeight: "800", color: item.alert ? "#f87171" : "#34d399", marginTop: "4px" }}>
+                      {item.val} frames {item.alert ? "⚠️" : "✓"}
+                    </div>
+                    <div style={{ fontSize: "0.7rem", color: "#64748b", marginTop: "2px" }}>
+                      ≈ {(item.val * 0.38).toFixed(1)}s duration
                     </div>
                   </div>
                 ))}

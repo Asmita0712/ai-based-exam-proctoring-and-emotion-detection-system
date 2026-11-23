@@ -39,9 +39,9 @@ class HeadPoseEstimator:
     def __init__(
         self,
         landmark_extractor: Optional[FaceLandmarkExtractor] = None,
-        yaw_threshold: float = 25.0,
-        pitch_threshold: float = 20.0,
-        roll_threshold: float = 25.0,
+        yaw_threshold: float = 38.0,
+        pitch_threshold: float = 30.0,
+        roll_threshold: float = 35.0,
     ) -> None:
         """
         Args:

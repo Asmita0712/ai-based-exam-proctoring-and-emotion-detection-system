@@ -168,7 +168,7 @@ def get_session_summary(session_id: str) -> ExamSummary:
     flagged_count = sum(1 for r in results if r.flag)
     flagged_pct = round((flagged_count / total_frames) * 100, 1)
 
-    multi_person_count = sum(1 for r in results if r.signals.multi_person_flag or (r.signals.person_count and r.signals.person_count > 1))
+    multi_person_count = sum(1 for r in results if r.signals.multi_person_flag)
     looking_away_count = sum(1 for r in results if r.signals.looking_away)
     head_turned_count = sum(1 for r in results if r.signals.turned_away)
     speech_count = sum(1 for r in results if r.signals.sustained_talking)
@@ -238,6 +238,10 @@ def reset_session(session_id: str) -> None:
         _SESSION_TAB_TRACKERS[session_id].reset()
     if session_id in _SESSION_RESULTS:
         del _SESSION_RESULTS[session_id]
+    if _VISUAL_PIPELINE is not None:
+        _VISUAL_PIPELINE.reset()
+    from ml.pipelines.inference_pipeline import _DEFAULT_INFERENCE_PIPELINE
+    _DEFAULT_INFERENCE_PIPELINE.reset_session(session_id)
 
 
 def process_frame_inference(

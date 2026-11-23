@@ -81,7 +81,7 @@ class PersonDetector:
                     boxes.append([float(coord) for coord in box])
                     confidences.append(float(conf))
 
-        # Deduplicate overlapping boxes and filter tiny background noise
+        # Deduplicate overlapping boxes and filter background noise/shoulders
         if len(boxes) > 1:
             combined = sorted(zip(boxes, confidences), key=lambda x: x[1], reverse=True)
             filtered_boxes: List[List[float]] = []
@@ -90,8 +90,11 @@ class PersonDetector:
 
             for b, c in combined:
                 b_area = (b[2] - b[0]) * (b[3] - b[1])
-                # Filter tiny false-positive patches (< 2.5% of frame)
-                if b_area < 0.025 * img_area:
+                # Primary person can be any reasonable size, but secondary persons must be substantial
+                min_area_ratio = 0.025 if len(filtered_boxes) == 0 else 0.065
+                min_conf = self.conf_threshold if len(filtered_boxes) == 0 else max(self.conf_threshold, 0.58)
+
+                if b_area < min_area_ratio * img_area or c < min_conf:
                     continue
 
                 # Check overlap / containment with already accepted person boxes
@@ -107,7 +110,8 @@ class PersonDetector:
                         min_a = min(b_area, ex_area)
                         union = b_area + ex_area - inter
                         iou = inter / union if union > 0 else 0.0
-                        if iou > 0.35 or (min_a > 0 and (inter / min_a) > 0.65):
+                        # If boxes overlap or one contains > 40% of the other, it's the same person's body/arm
+                        if iou > 0.25 or (min_a > 0 and (inter / min_a) > 0.40):
                             duplicate = True
                             break
 
