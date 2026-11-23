@@ -60,6 +60,7 @@ function App() {
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        videoRef.current.muted = true;
       }
 
       // Initialize Web Audio API Analyser for real-time voice VAD
@@ -489,6 +490,7 @@ function App() {
                 ref={videoRef}
                 autoPlay
                 playsInline
+                muted
                 style={{ width: "100%", height: "100%", objectFit: "cover", display: cameraActive ? "block" : "none" }}
               />
               {!cameraActive && (
