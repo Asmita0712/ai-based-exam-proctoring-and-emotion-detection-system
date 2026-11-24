@@ -6,6 +6,8 @@ import pytest
 
 from ml.models.emotion.emotion_classifier import EmotionClassifier, EMOTION_LABELS
 
+pytestmark = [pytest.mark.ml, pytest.mark.slow]
+
 
 def test_emotion_classifier_normal_face():
     classifier = EmotionClassifier(device="cpu", smoothing_window=5)

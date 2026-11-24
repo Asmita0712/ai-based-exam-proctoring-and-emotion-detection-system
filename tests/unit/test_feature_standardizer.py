@@ -6,6 +6,8 @@ import pytest
 
 from ml.utils.feature_standardizer import FeatureStandardizer, FEATURE_DIM, MODALITY_SLICES
 
+pytestmark = pytest.mark.unit
+
 
 def test_feature_standardizer_dimensions():
     standardizer = FeatureStandardizer()

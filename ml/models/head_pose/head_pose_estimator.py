@@ -19,6 +19,7 @@ class HeadPoseEstimator:
     """
     Estimates 3D head pose (yaw, pitch, roll in degrees) using 3D-to-2D
     correspondences via OpenCV solvePnP.
+    Calibrated specifically for laptop screens with asymmetric up/down pitch.
     """
 
     # Canonical 3D face model points (in arbitrary world units)
@@ -39,31 +40,34 @@ class HeadPoseEstimator:
     def __init__(
         self,
         landmark_extractor: Optional[FaceLandmarkExtractor] = None,
-        yaw_threshold: float = 38.0,
-        pitch_threshold: float = 30.0,
-        roll_threshold: float = 35.0,
+        yaw_threshold: float = 20.0,
+        pitch_threshold: float = 18.0,
+        pitch_up_threshold: float = 16.0,
+        pitch_down_threshold: float = 23.0,
+        roll_threshold: float = 24.0,
     ) -> None:
         """
         Args:
             landmark_extractor: Shared FaceLandmarkExtractor instance (optional).
-            yaw_threshold: Absolute yaw in degrees beyond which head is turned away.
-            pitch_threshold: Absolute pitch in degrees beyond which head is turned away.
-            roll_threshold: Absolute roll in degrees beyond which head is turned away.
+            yaw_threshold: Absolute yaw in degrees beyond which head is turned away from laptop screen.
+            pitch_threshold: Default symmetric pitch threshold if asymmetric limits not provided.
+            pitch_up_threshold: Degrees looking up above webcam at ceiling.
+            pitch_down_threshold: Degrees looking down past laptop screen towards phone/lap.
+            roll_threshold: Absolute roll in degrees beyond which head is tilted laterally.
         """
         self.landmark_extractor = landmark_extractor
         self.yaw_threshold = yaw_threshold
         self.pitch_threshold = pitch_threshold
+        self.pitch_up_threshold = pitch_up_threshold
+        self.pitch_down_threshold = pitch_down_threshold
         self.roll_threshold = roll_threshold
+        self.consecutive_turned = 0
 
     def estimate_from_landmarks(
         self, landmarks: Optional[List[Any]], image_shape: Tuple[int, int] = (480, 640)
     ) -> Dict[str, Any]:
         """
         Estimates head pose angles given 478 MediaPipe landmarks and frame dimensions.
-
-        Args:
-            landmarks: List of NormalizedLandmark objects or None.
-            image_shape: (height, width) of the image.
 
         Returns:
             {
@@ -132,17 +136,25 @@ class HeadPoseEstimator:
         elif yaw < -90:
             yaw += 180
 
-        turned_away = (
+        raw_turned = (
             abs(yaw) > self.yaw_threshold
-            or abs(pitch) > self.pitch_threshold
+            or pitch > self.pitch_up_threshold
+            or pitch < -self.pitch_down_threshold
             or abs(roll) > self.roll_threshold
         )
+
+        if raw_turned:
+            self.consecutive_turned += 1
+        else:
+            self.consecutive_turned = 0
+
+        debounced_turned = bool(self.consecutive_turned >= 2)
 
         return {
             "yaw": round(yaw, 2),
             "pitch": round(pitch, 2),
             "roll": round(roll, 2),
-            "turned_away": bool(turned_away),
+            "turned_away": debounced_turned,
         }
 
     def estimate(self, frame: np.ndarray) -> Dict[str, Any]:
@@ -156,3 +168,7 @@ class HeadPoseEstimator:
         landmarks = self.landmark_extractor.extract(frame)
         h, w = frame.shape[:2]
         return self.estimate_from_landmarks(landmarks, image_shape=(h, w))
+
+    def reset(self) -> None:
+        """Clears debounce counter."""
+        self.consecutive_turned = 0

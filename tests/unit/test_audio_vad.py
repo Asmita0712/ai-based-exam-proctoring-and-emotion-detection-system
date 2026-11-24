@@ -5,6 +5,8 @@ import numpy as np
 import pytest
 from ml.models.audio.vad_detector import SileroVADDetector
 
+pytestmark = pytest.mark.ml
+
 
 def test_silero_vad_silence():
     vad = SileroVADDetector(sample_rate=16000, speech_threshold=0.5, rolling_window_chunks=5)

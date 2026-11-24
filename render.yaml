@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: sentinelproctor-backend
+    runtime: python
+    region: oregon
+    plan: free
+    buildCommand: "pip install -r backend/requirements.txt"
+    startCommand: "uvicorn app.main:app --host 0.0.0.0 --port $PORT --app-dir backend"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: ENVIRONMENT
+        value: production
+      - key: PROCTOR_ENABLE_HEAVY_AI
+        value: "false"
+      - key: DATABASE_URL
+        sync: false
+      - key: PROCTOR_JWT_SECRET
+        generateValue: true
+      - key: PROCTOR_ADMIN_EMAIL
+        value: admin@sentinelproctor.ai
+      - key: PROCTOR_ADMIN_PASSWORD
+        sync: false
+      - key: PROCTOR_TEACHER_EMAIL
+        value: teacher@sentinelproctor.ai
+      - key: PROCTOR_TEACHER_PASSWORD
+        sync: false
+      - key: PROCTOR_FRONTEND_ORIGIN
+        sync: false

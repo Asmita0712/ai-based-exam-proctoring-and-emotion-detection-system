@@ -45,13 +45,24 @@ class SileroVADDetector:
         self.sustained_ratio = sustained_talking_ratio
         self.history: deque = deque(maxlen=rolling_window_chunks)
 
-        # Load Silero VAD model
-        self.model, _ = torch.hub.load(
-            repo_or_dir="snakers4/silero-vad",
-            model="silero_vad",
-            force_reload=False,
-            trust_repo=True,
-        )
+        # Load Silero VAD model (check offline local cache first to avoid slow network checks)
+        import os
+        hub_dir = torch.hub.get_dir()
+        local_repo = os.path.join(hub_dir, "snakers4_silero-vad_master")
+        if os.path.exists(local_repo):
+            self.model, _ = torch.hub.load(
+                repo_or_dir=local_repo,
+                model="silero_vad",
+                source="local",
+                trust_repo=True,
+            )
+        else:
+            self.model, _ = torch.hub.load(
+                repo_or_dir="snakers4/silero-vad",
+                model="silero_vad",
+                force_reload=False,
+                trust_repo=True,
+            )
         self.model.eval()
 
     def process_chunk(self, chunk: Union[np.ndarray, torch.Tensor]) -> Dict[str, Any]:

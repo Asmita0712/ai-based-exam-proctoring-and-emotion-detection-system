@@ -6,6 +6,8 @@ import pytest
 from ml.models.gaze.gaze_estimator import GazeEstimator
 from ml.models.head_pose.head_pose_estimator import HeadPoseEstimator
 
+pytestmark = pytest.mark.ml
+
 
 def test_gaze_estimator_none_landmarks():
     gaze = GazeEstimator(smoothing_window=5)

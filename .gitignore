@@ -29,9 +29,18 @@ models/checkpoints/*
 *.h5
 *.task
 
-# --- Secrets ---
+# --- Secrets & Databases ---
 .env
 *.key
+*.db
+*.sqlite
+*.sqlite3
+
+# --- Academic Documents & Media ---
+*.docx
+*.pdf
+extracted_media/
+scratch/
 
 # --- OS ---
 .DS_Store

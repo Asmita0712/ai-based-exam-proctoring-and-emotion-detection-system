@@ -10,6 +10,8 @@ from ml.pipelines.feature_pipeline import build_feature_window
 from ml.pipelines.inference_pipeline import run_inference
 from ml.utils.tab_tracker import TabTracker
 
+pytestmark = [pytest.mark.integration, pytest.mark.slow, pytest.mark.ml]
+
 
 def test_full_multimodal_pipeline_integration():
     # 1. Initialize pipelines

@@ -7,6 +7,8 @@ import pytest
 from ml.temporal.sequence_builder import build_sequences, SequenceBuffer
 from ml.temporal.bilstm import BiLSTMTemporalModel
 
+pytestmark = [pytest.mark.ml, pytest.mark.slow]
+
 
 def test_sequence_builder():
     windows = [{"person_count": 1} for _ in range(50)]

@@ -1,19 +1,13 @@
 """
-Pydantic schemas for suspicion results / evidence output.
-
-Fields here intentionally mirror the common feature representation
-described in the architecture (RULE 6), so the API layer never needs
-its own parallel definition of what a "result" looks like.
+Pydantic schemas for suspicion results / evidence output and forensic summaries.
 """
 from datetime import datetime
-from typing import Optional
+from typing import Dict, List, Optional
 from pydantic import BaseModel
 
 
 class ModalitySignals(BaseModel):
-    """Per-modality signals for one time window. All optional in Phase 0
-    since no modality is implemented yet -- populated stage by stage
-    through Phase 1 and Phase 2."""
+    """Per-modality signals for one time window."""
     gaze_ratio: Optional[float] = None
     looking_away: Optional[bool] = None
     yaw: Optional[float] = None
@@ -33,8 +27,10 @@ class SuspicionResult(BaseModel):
     window_start: datetime
     suspicion_score: float
     flag: bool
-    contributors: list[str] = []
+    contributors: List[str] = []
     signals: ModalitySignals
+    sampling_interval_ms: Optional[int] = 1000
+    inference_status: Optional[str] = "ACTIVE"
 
 
 class ExamSummary(BaseModel):
@@ -47,7 +43,9 @@ class ExamSummary(BaseModel):
     verdict: str
     verdict_label: str
     verdict_color: str
-    violations_summary: dict[str, int] = {}
+    violations_summary: Dict[str, int] = {}
     dominant_emotion: str = "neutral"
-    top_contributors: list[str] = []
-
+    top_contributors: List[str] = []
+    monitoring_coverage_pct: float = 100.0
+    monitoring_gaps_count: int = 0
+    delayed_frames_count: int = 0

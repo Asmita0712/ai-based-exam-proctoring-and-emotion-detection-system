@@ -6,6 +6,8 @@ import pytest
 from ml.models.face.person_detector import PersonDetector
 from ml.models.face.multi_person_detector import MultiPersonTracker
 
+pytestmark = [pytest.mark.ml, pytest.mark.slow]
+
 
 def test_person_detector_empty_frame():
     detector = PersonDetector(conf_threshold=0.5, device="cpu")

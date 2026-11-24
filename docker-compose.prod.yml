@@ -1,0 +1,109 @@
+version: "3.9"
+
+services:
+  # 1. High-Performance Relational Database (PostgreSQL 16)
+  postgres:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_DB: sentinelproctor
+      POSTGRES_USER: sentinel_admin
+      POSTGRES_PASSWORD: SentinelProdPassword2026!
+    command: >
+      postgres
+      -c max_connections=300
+      -c shared_buffers=1GB
+      -c effective_cache_size=3GB
+      -c work_mem=16MB
+      -c maintenance_work_mem=256MB
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=16MB
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sentinel_admin -d sentinelproctor"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 2. Redis Session & Caching Layer
+  redis:
+    image: redis:7-alpine
+    restart: always
+    command: redis-server --appendonly yes --maxmemory 1gb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # 3. Stateless FastAPI API Backend Instances
+  backend:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.backend
+    restart: always
+    environment:
+      PROCTOR_DATABASE_URL: postgresql://sentinel_admin:SentinelProdPassword2026!@postgres:5432/sentinelproctor
+      PROCTOR_REDIS_URL: redis://redis:6379/0
+      PROCTOR_JWT_SECRET: production_super_secure_jwt_secret_key_8492038104
+      ENVIRONMENT: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 4096M
+        reservations:
+          cpus: "1.0"
+          memory: 2048M
+
+  # 4. Asynchronous AI Inference Worker Pool
+  inference_worker:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.backend
+    restart: always
+    command: ["python", "-m", "backend.app.services.proctoring_worker"]
+    environment:
+      PROCTOR_DATABASE_URL: postgresql://sentinel_admin:SentinelProdPassword2026!@postgres:5432/sentinelproctor
+      PROCTOR_REDIS_URL: redis://redis:6379/0
+      ENVIRONMENT: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 4096M
+
+  # 5. Production React Frontend & Edge Nginx Reverse Proxy
+  reverse_proxy:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.frontend
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+  redis_data:

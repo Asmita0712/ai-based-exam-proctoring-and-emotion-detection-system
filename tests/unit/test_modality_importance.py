@@ -7,6 +7,8 @@ import pytest
 from ml.fusion.learned_fusion import LearnedFusion
 from ml.fusion.modality_attention import compute_modality_importance
 
+pytestmark = pytest.mark.ml
+
 
 def test_modality_importance_mlp():
     fusion = LearnedFusion(model_type="mlp", device="cpu")

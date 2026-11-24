@@ -5,26 +5,50 @@ RULE 2 / RULE 3: FastAPI routes call into this service; this service
 (not the routes) is responsible for calling into ml/pipelines/inference_pipeline.py.
 """
 import base64
-import cv2
+import json
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 import numpy as np
 
+try:
+    import cv2
+except ImportError:
+    cv2 = None
+
+from app.core.config import get_settings
+from app.core.logging import get_logger
 from app.schemas.events import BrowserEvent
 from app.schemas.results import SuspicionResult, ModalitySignals, ExamSummary
 from ml.pipelines.feature_pipeline import build_feature_window
 from ml.pipelines.inference_pipeline import run_inference
 from ml.utils.tab_tracker import TabTracker
 
+logger = get_logger(__name__)
+settings = get_settings()
+
 # Singleton VisualPipeline for fast real-time frame inference
 _VISUAL_PIPELINE: Optional[Any] = None
 
 
 def get_visual_pipeline():
+    """
+    Lazy initialization of heavy Visual Pipeline (YOLOv8 + MediaPipe).
+    Never loads heavy models on application startup (RULE 14 & Free-Tier Guard).
+    Returns None if heavy AI is disabled or dependencies/weights are unavailable.
+    """
     global _VISUAL_PIPELINE
+    if not settings.enable_heavy_ai:
+        return None
+
     if _VISUAL_PIPELINE is None:
-        from ml.pipelines.visual_pipeline import VisualPipeline
-        _VISUAL_PIPELINE = VisualPipeline()
+        try:
+            from ml.pipelines.visual_pipeline import VisualPipeline
+            _VISUAL_PIPELINE = VisualPipeline()
+            logger.info("Visual AI pipeline initialized successfully.")
+        except Exception as e:
+            logger.warning("Heavy Visual AI models could not be loaded: %s", e)
+            _VISUAL_PIPELINE = None
+
     return _VISUAL_PIPELINE
 
 # Active session tab trackers: session_id -> TabTracker
@@ -75,8 +99,15 @@ def process_window_inference(
     browser_status = tracker.get_status()
 
     now_dt = datetime.now(timezone.utc)
+    raw_visual = visual_signals or {}
+    inf_status = raw_visual.get("inference_status", "ACTIVE" if settings.enable_heavy_ai else "FREE_TIER_CPU_ONLY")
+
+    # If visual inference is disabled or unavailable, pass empty visual dict to build_feature_window
+    # so no fake visual cheating flags are generated (RULE 15 & Free-Tier Guard)
+    safe_visual = raw_visual if inf_status == "ACTIVE" else {}
+
     feature_window = build_feature_window(
-        visual_signals=visual_signals or {},
+        visual_signals=safe_visual,
         audio_signals=audio_signals or {},
         browser_events=[browser_status],
         window_start=now_dt.timestamp(),
@@ -92,20 +123,37 @@ def process_window_inference(
     pose_d = feature_window.get("head_pose") or {}
     emo_d = feature_window.get("emotion") or {}
 
-    mod_signals = ModalitySignals(
-        gaze_ratio=gaze_d.get("gaze_ratio"),
-        looking_away=feature_window.get("looking_away"),
-        yaw=pose_d.get("yaw"),
-        pitch=pose_d.get("pitch"),
-        turned_away=feature_window.get("turned_away"),
-        person_count=feature_window.get("person_count"),
-        multi_person_flag=feature_window.get("multi_person_flag"),
-        speech_probability=feature_window.get("speech_probability"),
-        sustained_talking=feature_window.get("sustained_talking"),
-        tab_hidden=feature_window.get("tab_hidden"),
-        dominant_emotion=emo_d.get("dominant_emotion"),
-        emotion_confidence=emo_d.get("emotion_confidence"),
-    )
+    if inf_status == "ACTIVE":
+        mod_signals = ModalitySignals(
+            gaze_ratio=gaze_d.get("gaze_ratio"),
+            looking_away=feature_window.get("looking_away"),
+            yaw=pose_d.get("yaw"),
+            pitch=pose_d.get("pitch"),
+            turned_away=feature_window.get("turned_away"),
+            person_count=feature_window.get("person_count"),
+            multi_person_flag=feature_window.get("multi_person_flag"),
+            speech_probability=feature_window.get("speech_probability"),
+            sustained_talking=feature_window.get("sustained_talking"),
+            tab_hidden=feature_window.get("tab_hidden"),
+            dominant_emotion=emo_d.get("dominant_emotion"),
+            emotion_confidence=emo_d.get("emotion_confidence"),
+        )
+    else:
+        # Free-tier or inference unavailable: honest representation without fabricating signals
+        mod_signals = ModalitySignals(
+            gaze_ratio=None,
+            looking_away=None,
+            yaw=None,
+            pitch=None,
+            turned_away=None,
+            person_count=None,
+            multi_person_flag=None,
+            speech_probability=feature_window.get("speech_probability"),
+            sustained_talking=feature_window.get("sustained_talking"),
+            tab_hidden=feature_window.get("tab_hidden"),
+            dominant_emotion=None,
+            emotion_confidence=None,
+        )
 
     susp_result = SuspicionResult(
         session_id=session_id,
@@ -114,6 +162,7 @@ def process_window_inference(
         flag=bool(inference_out["flag"]),
         contributors=inference_out.get("contributors", []),
         signals=mod_signals,
+        inference_status=inf_status,
     )
 
     if session_id not in _SESSION_RESULTS:
@@ -128,15 +177,56 @@ def get_session_results(session_id: str) -> List[SuspicionResult]:
     return _SESSION_RESULTS.get(session_id, [])
 
 
-def get_session_summary(session_id: str) -> ExamSummary:
+def get_session_summary(session_id: str, db: Optional[Any] = None) -> ExamSummary:
     """
     Computes post-exam cumulative integrity metrics and forensic verdict
     over all recorded inference frames for the given session.
+    Checks memory buffer first, with database fallback.
     """
     results = _SESSION_RESULTS.get(session_id, [])
     total_frames = len(results)
 
     if total_frames == 0:
+        # Check database fallback
+        close_db = False
+        try:
+            if db is None:
+                from app.db.session import SessionLocal
+                db = SessionLocal()
+                close_db = True
+            from app.db.models import ProctoringSession
+            proc = db.query(ProctoringSession).filter(ProctoringSession.id == session_id).first()
+            if proc and proc.total_frames_analyzed > 0:
+                violations = json.loads(proc.violations_json) if proc.violations_json else {}
+                top_c = json.loads(proc.top_contributors_json) if proc.top_contributors_json else []
+                duration = 0.0
+                if proc.started_at and proc.ended_at:
+                    duration = max(1.0, (proc.ended_at - proc.started_at).total_seconds())
+                flag_pct = round((proc.flagged_frames_count / max(1, proc.total_frames_analyzed)) * 100, 1)
+                return ExamSummary(
+                    session_id=session_id,
+                    total_frames_analyzed=proc.total_frames_analyzed,
+                    exam_duration_seconds=round(duration, 1),
+                    flagged_frames_count=proc.flagged_frames_count,
+                    flagged_percentage=flag_pct,
+                    integrity_score=proc.integrity_score,
+                    verdict=proc.verdict,
+                    verdict_label=proc.verdict_label,
+                    verdict_color=proc.verdict_color,
+                    violations_summary=violations,
+                    dominant_emotion=proc.dominant_emotion,
+                    top_contributors=top_c,
+                    monitoring_coverage_pct=proc.monitoring_coverage_pct or 100.0,
+                )
+        except Exception:
+            pass
+        finally:
+            if close_db and db:
+                try:
+                    db.close()
+                except Exception:
+                    pass
+
         return ExamSummary(
             session_id=session_id,
             total_frames_analyzed=0,
@@ -157,6 +247,7 @@ def get_session_summary(session_id: str) -> ExamSummary:
             },
             dominant_emotion="neutral",
             top_contributors=[],
+            monitoring_coverage_pct=100.0,
         )
 
     # Calculate duration
@@ -255,35 +346,71 @@ def process_frame_inference(
     Decodes a base64 image frame from the browser, runs real-time visual
     pipeline (YOLO + MediaPipe Iris + Head Pose + Emotion), and executes
     multimodal suspicion inference.
+    Features:
+    - Adaptive sampling feedback based on active concurrent load
+    - Backpressure protection preventing thread starvation at 500 concurrent sessions
     """
-    if "," in image_base64:
-        image_base64 = image_base64.split(",", 1)[1]
+    from app.services.proctoring_worker import get_queue_manager
+    qm = get_queue_manager()
+    active_count = len(_SESSION_RESULTS)
+    target_interval = qm.calculate_sampling_interval_ms(active_count)
 
-    img_bytes = base64.b64decode(image_base64)
-    np_arr = np.frombuffer(img_bytes, np.uint8)
-    frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+    # Check adaptive sampling & backpressure
+    should_process = qm.should_sample_frame(session_id, active_session_count=active_count)
 
-    visual_signals = {}
-    if frame is not None and frame.size > 0:
-        vp = get_visual_pipeline()
-        visual_signals = vp.process_frame(frame)
-        from app.core.logging import get_logger
-        _log = get_logger("proctoring_service")
-        _log.info(
-            "FRAME INFERENCE: size=%dx%d, persons=%s, looking_away=%s (gaze_ratio=%.2f), yaw=%.1f, pitch=%.1f, emo=%s",
-            frame.shape[1], frame.shape[0],
-            visual_signals.get("person_count"),
-            visual_signals.get("looking_away"),
-            visual_signals.get("gaze", {}).get("gaze_ratio", 0.5),
-            visual_signals.get("head_pose", {}).get("yaw", 0.0),
-            visual_signals.get("head_pose", {}).get("pitch", 0.0),
-            visual_signals.get("emotion", {}).get("dominant_emotion"),
+    # If throttled under high load, return previous inference state with updated audio/browser telemetry
+    if not should_process and session_id in _SESSION_RESULTS and _SESSION_RESULTS[session_id]:
+        last_res = _SESSION_RESULTS[session_id][-1]
+        # Clone with updated timing
+        return SuspicionResult(
+            session_id=session_id,
+            window_start=datetime.now(timezone.utc),
+            suspicion_score=last_res.suspicion_score,
+            flag=last_res.flag,
+            contributors=last_res.contributors,
+            signals=last_res.signals,
+            sampling_interval_ms=target_interval,
         )
 
-    return process_window_inference(
-        session_id=session_id,
-        visual_signals=visual_signals,
-        audio_signals=audio_signals,
-        browser_signals=browser_signals,
-        mode=mode,
-    )
+    qm.mark_in_flight_start(session_id)
+    try:
+        frame = None
+        if cv2 is not None and image_base64:
+            try:
+                raw_b64 = image_base64
+                if "," in raw_b64:
+                    raw_b64 = raw_b64.split(",", 1)[1]
+                img_bytes = base64.b64decode(raw_b64)
+                np_arr = np.frombuffer(img_bytes, np.uint8)
+                frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+            except Exception as e:
+                logger.warning("Frame decode error: %s", e)
+
+        visual_signals = {}
+        if not settings.enable_heavy_ai:
+            visual_signals = {"inference_status": "FREE_TIER_CPU_ONLY"}
+        elif frame is not None and frame.size > 0:
+            vp = get_visual_pipeline()
+            if vp is not None:
+                try:
+                    visual_signals = vp.process_frame(frame)
+                    visual_signals["inference_status"] = "ACTIVE"
+                except Exception as e:
+                    logger.warning("Visual AI pipeline processing error: %s", e)
+                    visual_signals = {"inference_status": "INFERENCE_UNAVAILABLE"}
+            else:
+                visual_signals = {"inference_status": "INFERENCE_UNAVAILABLE"}
+        else:
+            visual_signals = {"inference_status": "INFERENCE_UNAVAILABLE"}
+
+        result = process_window_inference(
+            session_id=session_id,
+            visual_signals=visual_signals,
+            audio_signals=audio_signals,
+            browser_signals=browser_signals,
+            mode=mode,
+        )
+        result.sampling_interval_ms = target_interval
+        return result
+    finally:
+        qm.mark_in_flight_end(session_id)

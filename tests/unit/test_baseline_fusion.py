@@ -4,6 +4,8 @@ Unit tests for RuleBasedFusion baseline.
 import pytest
 from ml.fusion.baseline_fusion import RuleBasedFusion, fuse
 
+pytestmark = pytest.mark.unit
+
 
 def test_baseline_fusion_normal():
     # Normal state: 1 person, looking at screen, head forward, no speech, tab visible

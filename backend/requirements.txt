@@ -1,5 +1,16 @@
-fastapi
-uvicorn[standard]
-pydantic
-pydantic-settings
-httpx
+# SentinelProctor AI - Production & Free-Tier Backend Dependencies
+# Tailored for Render Free Tier (512MB RAM) and Neon Serverless PostgreSQL
+
+fastapi>=0.100.0
+uvicorn[standard]>=0.23.0
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+sqlalchemy>=2.0.0
+psycopg2-binary>=2.9.9
+bcrypt>=4.0.1
+pyjwt>=2.8.0
+python-multipart>=0.0.9
+httpx>=0.25.0
+numpy>=1.24.0
+opencv-python-headless>=4.8.0
+reportlab>=4.0.0

@@ -8,6 +8,8 @@ from evaluation.metrics import compute_metrics
 from evaluation.ablation import run_ablation, mask_modality
 from evaluation.baseline_comparison import compare_to_baseline, PUBLISHED_BASELINE
 
+pytestmark = pytest.mark.integration
+
 
 def test_compute_metrics():
     y_true = [0, 1, 0, 1, 1]

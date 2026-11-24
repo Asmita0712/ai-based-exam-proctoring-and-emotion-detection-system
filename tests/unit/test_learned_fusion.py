@@ -6,6 +6,8 @@ import pytest
 
 from ml.fusion.learned_fusion import LearnedFusion, LogisticRegressionFusion, MLPFusionModel
 
+pytestmark = pytest.mark.ml
+
 
 def test_learned_fusion_mlp_prediction():
     fusion = LearnedFusion(model_type="mlp", device="cpu")

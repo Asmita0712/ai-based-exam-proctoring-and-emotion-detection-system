@@ -25,8 +25,10 @@ class VisualPipeline:
         self,
         yolo_model_path: str = "yolov8n.pt",
         person_conf: float = 0.55,
-        yaw_threshold: float = 38.0,
-        pitch_threshold: float = 30.0,
+        yaw_threshold: float = 20.0,
+        pitch_threshold: float = 18.0,
+        pitch_up_threshold: float = 16.0,
+        pitch_down_threshold: float = 23.0,
         emotion_weights_path: Optional[str] = None,
         device: Optional[str] = None,
     ) -> None:
@@ -39,17 +41,19 @@ class VisualPipeline:
         self.landmark_extractor = FaceLandmarkExtractor()
         self.gaze_estimator = GazeEstimator(
             landmark_extractor=self.landmark_extractor,
-            horizontal_threshold_low=0.32,
-            horizontal_threshold_high=0.68,
-            vertical_threshold_low=0.22,
+            horizontal_threshold_low=0.30,
+            horizontal_threshold_high=0.70,
+            vertical_threshold_low=0.25,
             vertical_threshold_high=0.78,
-            smoothing_window=5,
+            smoothing_window=4,
         )
         self.head_pose_estimator = HeadPoseEstimator(
             landmark_extractor=self.landmark_extractor,
             yaw_threshold=yaw_threshold,
             pitch_threshold=pitch_threshold,
-            roll_threshold=35.0,
+            pitch_up_threshold=pitch_up_threshold,
+            pitch_down_threshold=pitch_down_threshold,
+            roll_threshold=24.0,
         )
         self.emotion_classifier = EmotionClassifier(
             weights_path=emotion_weights_path,
@@ -94,6 +98,10 @@ class VisualPipeline:
         gaze_res = self.gaze_estimator.estimate_from_landmarks(landmarks)
         pose_res = self.head_pose_estimator.estimate_from_landmarks(landmarks, image_shape=(h, w))
 
+        # If head is turned past laptop screen (yaw > 19 or pitch > 16), candidate is looking away
+        effective_looking_away = bool(gaze_res["looking_away"] or pose_res["turned_away"])
+        gaze_res["looking_away"] = effective_looking_away
+
         # 5. Extract face crop for emotion classification (RULE 13: reuse detections)
         face_crop = None
         if landmarks and len(landmarks) >= 478:
@@ -123,7 +131,7 @@ class VisualPipeline:
             "multi_person_flag": mp_status["multi_person_flag"],
             "no_person_flag": mp_status["no_person_flag"],
             "gaze": gaze_res,
-            "looking_away": gaze_res["looking_away"],
+            "looking_away": effective_looking_away,
             "head_pose": pose_res,
             "turned_away": pose_res["turned_away"],
             "emotion": emotion_res,
